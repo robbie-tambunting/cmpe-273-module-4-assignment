@@ -260,6 +260,52 @@ $ curl -s -w '\nHTTP %{http_code}\n' localhost:8080/health
 HTTP 200
 ```
 
+## Screenshots
+
+Screenshots of the implementation running. Each one shows the command and its output.
+
+### 1. Both services running
+
+Inventory Service listening on port 8081:
+
+![Inventory Service running on port 8081](screenshots/inventory-service-running.png)
+
+Order Service listening on port 8080:
+
+![Order Service running on port 8080](screenshots/order-service-running.png)
+
+### 2. Successful order
+
+`POST /orders` for 2 widgets returns `201` with the new order in status `CREATED`:
+
+![Successful order returning HTTP 201](screenshots/successful-order.png)
+
+### 3. Out-of-stock order
+
+`POST /orders` for a gadget, which has no stock, returns `409 item unavailable`:
+
+![Out-of-stock order returning HTTP 409](screenshots/out-of-stock-order.png)
+
+### 4. Inventory Service stopped
+
+The Inventory Service log shows the availability queries it answered (all `200 OK`), followed by a
+clean shutdown with `Ctrl+C`:
+
+![Inventory Service handling queries, then shutting down](screenshots/inventory-service-shutdown.png)
+
+### 5. Order rejected while Inventory is down
+
+With Inventory stopped, `POST /orders` returns `503 inventory service unavailable`:
+
+![Order rejected with HTTP 503 while Inventory is down](screenshots/order-rejected-on-inventory-failure.png)
+
+### 6. Order Service still running
+
+The Order Service log shows the `ConnectError` being logged, the `503` response, and then a
+`GET /health` answered with `200 OK` by the same running process:
+
+![Order Service logging the failure and still answering health checks](screenshots/order-service-running-and-failed-request.png)
+
 ## Known limitations
 
 - **Check-then-create race.** Availability is a read, not a reservation. Two concurrent orders can
