@@ -118,22 +118,22 @@ only logs the event it would publish.
 Accepts requests to place orders and keeps the order records. To decide whether an order can be
 accepted, it asks the Inventory Service about availability. It never inspects stock itself.
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /health` | Liveness check. Returns `200 {"status": "ok"}`. |
-| `POST /orders` | Create an order from `{"item_id": str, "quantity": int >= 1}`. |
-| `GET /orders/{order_id}` | Fetch an order, or `404` if it does not exist. |
+| Endpoint                 | Purpose                                                        |
+| ------------------------ | -------------------------------------------------------------- |
+| `GET /health`            | Liveness check. Returns `200 {"status": "ok"}`.                |
+| `POST /orders`           | Create an order from `{"item_id": str, "quantity": int >= 1}`. |
+| `GET /orders/{order_id}` | Fetch an order, or `404` if it does not exist.                 |
 
 `POST /orders` calls Inventory with a 2-second timeout and maps the outcome to a response:
 
-| Inventory outcome | Order response |
-|---|---|
-| Available | `201` with the order `{id, item_id, quantity, status: "CREATED", created_at}` |
-| Not available | `409 {"detail": "item unavailable"}` (no order is stored) |
-| Unknown item (`404`) | `404 {"detail": "unknown item"}` |
-| Connection refused | `503 {"detail": "inventory service unavailable"}` |
-| Timeout | `504 {"detail": "inventory service timed out"}` |
-| Any other error | `502 {"detail": "bad response from inventory service"}` |
+| Inventory outcome    | Order response                                                                |
+| -------------------- | ----------------------------------------------------------------------------- |
+| Available            | `201` with the order `{id, item_id, quantity, status: "CREATED", created_at}` |
+| Not available        | `409 {"detail": "item unavailable"}` (no order is stored)                     |
+| Unknown item (`404`) | `404 {"detail": "unknown item"}`                                              |
+| Connection refused   | `503 {"detail": "inventory service unavailable"}`                             |
+| Timeout              | `504 {"detail": "inventory service timed out"}`                               |
+| Any other error      | `502 {"detail": "bad response from inventory service"}`                       |
 
 Every downstream failure is logged, and none of them stops the service. After a successful order
 it logs an `OrderCreated` line (`[event] OrderCreated order_id=... (would publish to broker)`), which
@@ -143,9 +143,9 @@ stands in for publishing to a message broker.
 
 Owns stock levels and answers availability questions. It has no knowledge of orders.
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /health` | Liveness check. Returns `200 {"status": "ok"}`. |
+| Endpoint                                  | Purpose                                                                                                                                                 |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /health`                             | Liveness check. Returns `200 {"status": "ok"}`.                                                                                                         |
 | `GET /items/{item_id}/availability?qty=N` | Report whether `N` units (default 1, minimum 1) are in stock. Returns `200 {"item_id", "requested", "available"}`, or `404 {"detail": "unknown item"}`. |
 
 The availability endpoint is read-only: calling it never changes stock.
@@ -161,11 +161,11 @@ would publish.
 Each service is the only owner of its data and no service reads another service's data directly.
 Other services get at the data only by calling the owner's API.
 
-| Service | Owns | Storage |
-|---|---|---|
-| Order Service | Orders and their status | In-memory dictionary |
-| Inventory Service | Stock levels per item | In-memory dictionary |
-| Notification Service (not implemented) | Notification records and contact preferences | Not implemented |
+| Service                                | Owns                                         | Storage              |
+| -------------------------------------- | -------------------------------------------- | -------------------- |
+| Order Service                          | Orders and their status                      | In-memory dictionary |
+| Inventory Service                      | Stock levels per item                        | In-memory dictionary |
+| Notification Service (not implemented) | Notification records and contact preferences | Not implemented      |
 
 For example, Order learns whether stock is available only by calling Inventory's availability
 endpoint. It does not know how Inventory stores stock, and Inventory does not know that orders exist.
@@ -190,11 +190,11 @@ explicit error response.
 
 ## Command / Query / Event
 
-| Operation | Type | Reasoning |
-|---|---|---|
-| Check availability (`GET /items/{id}/availability`) | Query | It only reads stock and changes nothing, so it can safely be repeated or retried. |
-| Create order (`POST /orders`) | Command | It asks the system to do something, namely create an order, and changes state, so it can be accepted or rejected. |
-| Order was created (`OrderCreated`) | Event | It records a fact that has already happened, which other services such as Notification can react to without Order knowing about them. |
+| Operation                                           | Type    | Reasoning                                                                                                                             |
+| --------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Check availability (`GET /items/{id}/availability`) | Query   | It only reads stock and changes nothing, so it can safely be repeated or retried.                                                     |
+| Create order (`POST /orders`)                       | Command | It asks the system to do something, namely create an order, and changes state, so it can be accepted or rejected.                     |
+| Order was created (`OrderCreated`)                  | Event   | It records a fact that has already happened, which other services such as Notification can react to without Order knowing about them. |
 
 ## Example requests
 
@@ -323,4 +323,4 @@ The Order Service log shows the `ConnectError` being logged, the `503` response,
 
 Question: Why are clear service boundaries and data ownership important in a distributed architecture?
 
-TODO:
+A microservice can be related to a function. The parameters and return value is like the contract/service boundary, and the private variables are like the owned data that can't be edited by another service. Without clear service boundaries and data ownership, services risk storing and editing the same particular state. Defining these concepts clearly allows microservices to remain loosely coupled. The Order service threw a 503 error and continued running because it depended on the Inventory service and not on its own data.
