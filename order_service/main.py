@@ -35,6 +35,34 @@ class Order(BaseModel):
     created_at: datetime
 
 
+async def check_availability(item_id: str, quantity: int) -> bool:
+    """Query Inventory. Map every downstream failure to an HTTP error."""
+    url = f"{INVENTORY_URL}/items/{quote(item_id, safe='')}/availability"
+    try:
+        async with httpx.AsyncClient(timeout=INVENTORY_TIMEOUT_SECONDS) as c:
+            response = await c.get(url, params={"qty": quantity})
+            response.raise_for_status()
+            return bool(response.json()["available"])
+    except httpx.ConnectError as exc:
+        logger.error("inventory unreachable at %s: %r", INVENTORY_URL, exc)
+        raise HTTPException(503, "inventory service unavailable") from exc
+    except httpx.TimeoutException as exc:
+        logger.error("inventory timed out after %ss: %r",
+                     INVENTORY_TIMEOUT_SECONDS, exc)
+        raise HTTPException(504, "inventory service timed out") from exc
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        if status == 404:
+            logger.warning("inventory does not know item %r", item_id)
+            raise HTTPException(404, "unknown item") from exc
+        logger.error("inventory returned HTTP %s: %r", status, exc)
+        raise HTTPException(
+            502, "bad response from inventory service") from exc
+    except (httpx.HTTPError, ValueError, KeyError) as exc:
+        # Other transport errors, or a body that is not the expected JSON.
+        logger.error("unexpected inventory failure: %r", exc)
+        raise HTTPException(
+            502, "bad response from inventory service") from exc
 
 @app.get("/health")
 def health() -> dict[str, str]:
