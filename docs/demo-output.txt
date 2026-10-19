@@ -1,0 +1,37 @@
+Order Service demo output
+Captured: 2026-10-19 04:36:51 UTC
+Python: Python 3.13.3
+Order Service: http://localhost:8080   Inventory Service: http://localhost:8081
+
+=== 1. Successful order (widget x2) ===
+$ curl -s -w '\nHTTP %{http_code}\n' -X POST localhost:8080/orders -H 'Content-Type: application/json' -d '{"item_id":"widget","quantity":2}'
+{"id":"cd521c37-ffea-4cce-b11a-8c67cacaf736","item_id":"widget","quantity":2,"status":"CREATED","created_at":"2026-10-19T04:36:51.161152Z"}
+HTTP 201
+
+--- Order Service log for step 1 ---
+INFO:     HTTP Request: GET http://localhost:8081/items/widget/availability?qty=2 "HTTP/1.1 200 OK"
+INFO:     [event] OrderCreated order_id=cd521c37-ffea-4cce-b11a-8c67cacaf736 item_id=widget (would publish to broker)
+INFO:     127.0.0.1:60342 - "POST /orders HTTP/1.1" 201 Created
+
+=== 2. Out-of-stock order (gadget x1) ===
+$ curl -s -w '\nHTTP %{http_code}\n' -X POST localhost:8080/orders -H 'Content-Type: application/json' -d '{"item_id":"gadget","quantity":1}'
+{"detail":"item unavailable"}
+HTTP 409
+
+=== 3. Inventory Service stopped, then order (widget x1) ===
+$ kill 11887   # stop Inventory Service
+(Inventory Service stopped; port 8081 refuses connections)
+
+$ curl -s -w '\nHTTP %{http_code}\n' -X POST localhost:8080/orders -H 'Content-Type: application/json' -d '{"item_id":"widget","quantity":1}'
+{"detail":"inventory service unavailable"}
+HTTP 503
+
+--- Order Service log for step 3 ---
+ERROR:     inventory unreachable at http://localhost:8081: ConnectError('All connection attempts failed')
+INFO:     127.0.0.1:60350 - "POST /orders HTTP/1.1" 503 Service Unavailable
+
+=== 4. Order Service health after the failure ===
+$ curl -s -w '\nHTTP %{http_code}\n' localhost:8080/health
+{"status":"ok"}
+HTTP 200
+
